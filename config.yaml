@@ -1,0 +1,17 @@
+# SimpleHarness configuration
+# CLI flag --model overrides the model set here.
+
+model: openrouter/openai/gpt-5-mini
+
+# ANSI color code numbers for terminal output (override to customize)
+colors:
+  you: 94        # bright blue
+  assistant: 93  # bright yellow
+  tool: 32       # green
+  dim: 2         # dim/grey
+
+system_prompt: |
+  You are a helpful coding assistant. You can read, list, and edit files on the
+  user's filesystem, and run shell commands. Always explore the project structure
+  before making changes. When writing code, prefer clear, minimal solutions.
+  Always be sussinct and do not write non-US keyboard characters.
