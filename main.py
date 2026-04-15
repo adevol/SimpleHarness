@@ -14,7 +14,7 @@ Any litellm model string works (provided the required API keys are set), e.g.:
 import argparse, json, subprocess, litellm, yaml
 from pathlib import Path
 
-COLORS = {"you": 94, "assistant": 93, "tool": 32, "dim": 2}
+COLORS = {"you": 94, "assistant": 93, "tool": 32, "dim": 2, "error": 31}
 def c(role, text): return f"\033[{COLORS[role]}m{text}\033[0m"
 
 # ---------------------------------------------------------------------------
@@ -47,9 +47,9 @@ def tool(func, desc, *params):
     return func.__name__, (func, schema)
 
 TOOLS = dict([
-    tool(read_file,  "Read a file.",             "path"),
-    tool(list_files, "List a directory.",        "directory"),
-    tool(edit_file,  "Write content to a file.", "path", "content"),
+    #tool(read_file,  "Read a file.",             "path"),
+    #tool(list_files, "List a directory.",        "directory"),
+    #tool(edit_file,  "Write content to a file.", "path", "content"),
     tool(run_bash,   "Run a shell command.",     "command"),
 ])
 
@@ -117,18 +117,21 @@ def main() -> None:
             continue
         messages.append({"role": "user", "content": prompt})
         # agent loop: keep going until the model stops calling tools
-        while True:
-            reply = call_model(model, messages)
-            messages.append(reply)
-            if not reply.get("tool_calls"):
-                print(f"\n{c('assistant', 'Agent:')} {reply.get('content', '')}\n"); break
-            for tc in reply["tool_calls"]:
-                name = tc["function"]["name"]
-                tool_args = json.loads(tc["function"]["arguments"])
-                short = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_args.items())
-                print(c("tool", f"  [{name}]") + c("dim", f"({short})"))
-                result = runtool(name, tool_args)
-                messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+        try:
+            while True:
+                reply = call_model(model, messages)
+                messages.append(reply)
+                if not reply.get("tool_calls"):
+                    print(f"\n{c('assistant', 'Agent:')} {reply.get('content', '')}\n"); break
+                for tc in reply["tool_calls"]:
+                    name = tc["function"]["name"]
+                    tool_args = json.loads(tc["function"]["arguments"])
+                    short = ", ".join(f"{k}={repr(v)[:50]}" for k, v in tool_args.items())
+                    print(c("tool", f"  [{name}]") + c("dim", f"({short})"))
+                    result = runtool(name, tool_args)
+                    messages.append({"role": "tool", "tool_call_id": tc["id"], "content": result})
+        except Exception as e:
+            print(c("error", f"  [error] {type(e).__name__}: {e}\n"))
 
 if __name__ == "__main__":
     main()
