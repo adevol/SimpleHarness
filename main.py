@@ -47,9 +47,9 @@ def tool(func, desc, *params):
     return func.__name__, (func, schema)
 
 TOOLS = dict([
-    #tool(read_file,  "Read a file.",             "path"),
-    #tool(list_files, "List a directory.",        "directory"),
-    #tool(edit_file,  "Write content to a file.", "path", "content"),
+    tool(read_file,  "Read a file.",             "path"),
+    tool(list_files, "List a directory.",        "directory"),
+    tool(edit_file,  "Write content to a file.", "path", "content"),
     tool(run_bash,   "Run a shell command.",     "command"),
 ])
 
@@ -65,18 +65,15 @@ def runtool(name: str, args: dict) -> str:
 # Slash commands
 # ---------------------------------------------------------------------------
 
-def count(model, messages):
-    return litellm.token_counter(model=model, messages=messages)
-
 def cmd_context(messages, model):
     window = (litellm.get_model_info(model) or {}).get("max_input_tokens") or 0
-    used = count(model, messages)
+    used = litellm.token_counter(model=model, messages=messages)
     pct = f" ({used / window * 100:.1f}%)" if window else ""
     print(c("dim", f"  window: {window or '?'}  |  used: {used:,}{pct}"))
     for role in ("system", "user", "assistant", "tool"):
         msgs = [m for m in messages if m.get("role") == role]
         if msgs:
-            print(c("dim", f"    {role:<10} {count(model, msgs):>7,}  ({len(msgs)} msg)"))
+            print(c("dim", f"    {role:<10} {litellm.token_counter(model=model, messages=msgs):>7,}  ({len(msgs)} msg)"))
     print()
 
 COMMANDS = {"/context": cmd_context}
@@ -84,10 +81,6 @@ COMMANDS = {"/context": cmd_context}
 # ---------------------------------------------------------------------------
 # Main loop
 # ---------------------------------------------------------------------------
-
-def call_model(model: str, messages: list[dict]) -> dict:
-    resp = litellm.completion(model=model, messages=messages, tools=[t[1] for t in TOOLS.values()])
-    return resp.choices[0].message.model_dump()
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="SimpleHarness: a tiny coding agent CLI")
@@ -116,10 +109,11 @@ def main() -> None:
             COMMANDS[prompt](messages, model)
             continue
         messages.append({"role": "user", "content": prompt})
-        # agent loop: keep going until the model stops calling tools
         try:
             while True:
-                reply = call_model(model, messages)
+                reply = litellm.completion(
+                    model=model, messages=messages, tools=[t[1] for t in TOOLS.values()],
+                ).choices[0].message.model_dump()
                 messages.append(reply)
                 if not reply.get("tool_calls"):
                     print(f"\n{c('assistant', 'Agent:')} {reply.get('content', '')}\n"); break
